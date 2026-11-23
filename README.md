@@ -30,7 +30,7 @@ npx auth@latest create-admin --email admin@school.local --password "YourSecurePa
 | Role | How assigned | Scope |
 |------|----------------|--------|
 | **admin** | `create-admin` CLI or Better Auth admin plugin | Full mutations; all student & staff APIs |
-| **student** | Default on email sign-up | Read own student data; download own TC/LC only |
+| **student** | Created by admin after admission (no public sign-up) | Read own data only when admitted and linked |
 | **staff/teacher** | *No login* | Records managed only by admin under `/api/staff` |
 
 ### Authentication (session cookie)
@@ -113,7 +113,7 @@ Handled by Better Auth (not custom controllers). Mount path: `/api/auth/*splat`.
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `GET` | `/api/auth/ok` | No | Auth server health |
-| `POST` | `/api/auth/sign-up/email` | No | Register user (default role: **student**) |
+| `POST` | `/api/auth/sign-up/email` | **Disabled** | Public student sign-up is turned off |
 | `POST` | `/api/auth/sign-in/email` | No | Login with email + password |
 | `POST` | `/api/auth/sign-out` | Session | Logout |
 | `GET` | `/api/auth/get-session` | Session | Current session |
@@ -123,18 +123,12 @@ Admin user management (requires **admin** session) — see [Better Auth Admin](h
 - `POST /api/auth/admin/create-user`
 - `POST /api/auth/admin/set-role`
 
-### Sign up (student)
+### Student portal login policy
 
-```http
-POST /api/auth/sign-up/email
-Content-Type: application/json
-
-{
-  "name": "Rahul Kumar",
-  "email": "rahul@student.local",
-  "password": "SecurePass123"
-}
-```
+1. School completes **registration** (approved) and **admission** (admin).  
+2. Admin creates the login via **`portalAccess` on admission** or **`POST /api/students/:id/portal-access`** (uses Better Auth `createUser` + links `students.userId`).  
+3. Only then can the student **`POST /api/auth/sign-in/email`**.  
+4. Sign-in is rejected if the user is not linked to an **admitted** student (`admitted`, `transferred`, or `left` lifecycle).
 
 ### Sign in
 
@@ -167,7 +161,8 @@ Students see only records linked to their account (`students.userId` = logged-in
 |--------|------|--------|-------------|
 | `GET` | `/api/students/me` | Student | Own profile + latest inquiry, registration, admission |
 | `GET` | `/api/students/profile/:id` | Student (own) / Admin (any) | Single student master record |
-| `PATCH` | `/api/students/:id/link-user` | **Admin** | Attach Better Auth `userId` to student for portal access |
+| `PATCH` | `/api/students/:id/link-user` | **Admin** | Link existing auth user (student must already be **admitted**) |
+| `POST` | `/api/students/:id/portal-access` | **Admin** | Create login + link after admission |
 
 `PATCH .../link-user` **body**
 
@@ -255,7 +250,7 @@ Students see only records linked to their account (`students.userId` = logged-in
 |--------|------|--------|-------------|
 | `GET` | `/api/students/admissions` | Student (own) / Admin | List admissions |
 | `GET` | `/api/students/admissions/:id` | Student (own) / Admin | Admission detail |
-| `POST` | `/api/students/admissions` | **Admin** | Admit student; updates class/section/stream on student |
+| `POST` | `/api/students/admissions` | **Admin** | Admit student (**requires approved registration**); optional `portalAccess` |
 | `PATCH` | `/api/students/admissions/:id` | **Admin** | Update admission / sync class fields on student |
 
 **List query:** `page`, `limit`, `status` (`active`  `completed`  `cancelled`), `studentId`
@@ -271,9 +266,16 @@ Students see only records linked to their account (`students.userId` = logged-in
   "section": "A",
   "stream": "Science",
   "academicYear": "2025-26",
-  "admissionNumber": "optional-custom-number"
+  "admissionNumber": "optional-custom-number",
+  "portalAccess": {
+    "email": "student@school.local",
+    "password": "SecurePass123",
+    "name": "Rahul Kumar"
+  }
 }
 ```
+
+`portalAccess` is optional; you can call `POST /api/students/:studentId/portal-access` later instead.
 
 ---
 
@@ -457,10 +459,9 @@ Files stored under `uploads/payslips/`.
 3. `POST /api/students/inquiries` — create inquiry
 4. `POST /api/students/inquiries/:id/convert-registration`
 5. `PATCH /api/students/registrations/:id` — `{ "status": "approved" }`
-6. `POST /api/students/admissions`
-7. `POST /api/auth/sign-up/email` — student user
-8. `PATCH /api/students/:studentId/link-user` — `{ "userId": "<new-user-id>" }`
-9. Sign in as student → `GET /api/students/me`
+6. `PATCH /api/students/registrations/:id` — `{ "status": "approved" }`
+7. `POST /api/students/admissions` — include `portalAccess` or use `POST .../portal-access`
+8. Sign in as student → `GET /api/students/me`
 10. Admin upload TC/LC → student `GET .../download`
 
 ### B. Staff (admin only)

@@ -11,6 +11,8 @@ import { ApiError } from "../utils/api-error.js";
 import { createDocumentNumber } from "../utils/document-number.js";
 import { createId } from "../utils/ids.js";
 import { getParamId } from "../utils/request.js";
+import { assertApprovedRegistration } from "../utils/student-portal-access.js";
+import { provisionStudentPortalLogin } from "../utils/student-portal-provision.js";
 
 type AuthUser = { id: string };
 
@@ -84,6 +86,7 @@ export const createAdmission = asyncHandler(async (req: Request, res: Response) 
     section?: string;
     stream?: string;
     academicYear?: string;
+    portalAccess?: { email: string; password: string; name?: string };
   };
 
   const [student] = await db
@@ -93,6 +96,12 @@ export const createAdmission = asyncHandler(async (req: Request, res: Response) 
     .limit(1);
 
   if (!student) throw new ApiError(404, "Student not found");
+
+  if (student.lifecycleStatus === "admitted") {
+    throw new ApiError(400, "Student is already admitted");
+  }
+
+  await assertApprovedRegistration(body.studentId);
 
   const admissionNumber = body.admissionNumber ?? createDocumentNumber("ADM");
   const id = createId();
@@ -130,7 +139,28 @@ export const createAdmission = asyncHandler(async (req: Request, res: Response) 
     .from(studentAdmissions)
     .where(eq(studentAdmissions.id, id));
 
-  res.status(201).json({ success: true, data: row });
+  let portal:
+    | Awaited<ReturnType<typeof provisionStudentPortalLogin>>
+    | undefined;
+  if (body.portalAccess) {
+    portal = await provisionStudentPortalLogin(req, body.studentId, {
+      email: body.portalAccess.email,
+      password: body.portalAccess.password,
+      name:
+        body.portalAccess.name ??
+        `${student.firstName} ${student.lastName}`.trim(),
+    });
+  }
+
+  res.status(201).json({
+    success: true,
+    data: {
+      admission: row,
+      portal: portal
+        ? { userId: portal.user.id, email: portal.user.email }
+        : null,
+    },
+  });
 });
 
 export const updateAdmission = asyncHandler(async (req: Request, res: Response) => {

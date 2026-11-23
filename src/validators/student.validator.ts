@@ -74,6 +74,12 @@ export const registrationListQuerySchema = paginationQuerySchema.extend({
   studentId: z.string().min(1).optional(),
 });
 
+const portalAccessSchema = z.object({
+  email: z.email(),
+  password: z.string().min(8).max(128),
+  name: z.string().min(1).max(100).optional(),
+});
+
 export const createAdmissionSchema = z.object({
   studentId: z.string().min(1),
   registrationId: z.string().min(1).optional(),
@@ -83,7 +89,10 @@ export const createAdmissionSchema = z.object({
   section: z.string().max(50).optional(),
   stream: z.string().max(50).optional(),
   academicYear: z.string().max(20).optional(),
+  portalAccess: portalAccessSchema.optional(),
 });
+
+export const provisionPortalAccessSchema = portalAccessSchema;
 
 export const updateAdmissionSchema = z.object({
   status: z.enum(["active", "completed", "cancelled"]).optional(),

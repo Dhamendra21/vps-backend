@@ -12,6 +12,7 @@ import { asyncHandler } from "../utils/async-handler.js";
 import { ApiError } from "../utils/api-error.js";
 import { isAdminRole } from "../utils/roles.js";
 import { getParamId } from "../utils/request.js";
+import { isPortalEligibleLifecycle } from "../utils/student-portal-access.js";
 
 type AuthUser = { id: string; role?: string | null };
 
@@ -69,6 +70,13 @@ export const linkStudentToUser = asyncHandler(
       .limit(1);
 
     if (!student) throw new ApiError(404, "Student not found");
+
+    if (!isPortalEligibleLifecycle(student.lifecycleStatus)) {
+      throw new ApiError(
+        400,
+        "Portal login can only be linked after the student is admitted",
+      );
+    }
 
     const [updated] = await db
       .update(students)

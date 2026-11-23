@@ -32,6 +32,7 @@ import {
   getStudentById,
   linkStudentToUser,
 } from "../controllers/student-profile.controller.js";
+import { provisionPortalAccess } from "../controllers/student-portal.controller.js";
 import { attachSession, requireAuth } from "../middlewares/auth.middleware.js";
 import { requireAdmin } from "../middlewares/rbac.middleware.js";
 import { certificateUpload } from "../middlewares/upload.middleware.js";
@@ -48,6 +49,7 @@ import {
   idParamSchema,
   inquiryListQuerySchema,
   linkStudentUserSchema,
+  provisionPortalAccessSchema,
   registrationListQuerySchema,
   updateAdmissionSchema,
   updateInquirySchema,
@@ -195,6 +197,13 @@ studentRouter.patch(
   requireAdmin,
   validate({ params: idParamSchema, body: linkStudentUserSchema }),
   linkStudentToUser,
+);
+
+studentRouter.post(
+  "/:id/portal-access",
+  requireAdmin,
+  validate({ params: idParamSchema, body: provisionPortalAccessSchema }),
+  provisionPortalAccess,
 );
 
 export { studentRouter };
